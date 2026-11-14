@@ -12,20 +12,38 @@ object ShapeRecognizer {
         val end = points.last()
         val totalDistance = distance(start, end)
         
-        // Çizgi kontrolü (Başlangıç ve bitiş dışındaki noktalar çok uzaklaşmadıysa düz çizgidir)
+        // Düz çizgi kontrolü
         val maxDeviation = points.maxOf { distanceToSegment(it, start, end) }
         if (maxDeviation < 15f) {
             return listOf(start, end)
         }
 
         // Kapalı şekil kontrolü (Başlangıç ve bitiş noktaları birbirine yakınsa)
-        if (totalDistance < 40f && points.size > 20) {
+        if (totalDistance < 40f && points.size > 15) {
             val minX = points.minOf { it.x }
             val maxX = points.maxOf { it.x }
             val minY = points.minOf { it.y }
             val maxY = points.maxOf { it.y }
             
-            // Diktörtgen / Kare tahmini için köşe noktaları oluştur
+            // Çizilen şeklin genişlik ve yükseklik oranına veya köşe sayısına göre üçgen/dikdörtgen ayrımı
+            // Basitçe: Eğer kullanıcı üçgen çizdiyse, köşe analizi veya üst orta nokta tahmini yapabiliriz.
+            // Şimdilik çizen kişinin çizim hatlarına göre en yüksek noktayı tepe kabul eden bir üçgen şablonu ekleyelim:
+            val width = maxX - minX
+            val height = maxY - minY
+            
+            // Eğer şekil kare/dikdörtgene yakın değil de üçgen formuna uygunsa (örneğin sivri tepe)
+            // Alternatif olarak nokta sayısına göre üç köşe (Üçgen) tespiti:
+            if (isTriangleCandidate(points)) {
+                val topPoint = points.minByOrNull { it.y } ?: PointF(minX + width / 2f, minY)
+                return listOf(
+                    topPoint,
+                    PointF(maxX, maxY),
+                    PointF(minX, maxY),
+                    topPoint
+                )
+            }
+
+            // Standart Dikdörtgen
             return listOf(
                 PointF(minX, minY),
                 PointF(maxX, minY),
@@ -36,6 +54,14 @@ object ShapeRecognizer {
         }
 
         return null
+    }
+
+    private fun isTriangleCandidate(points: List<PointF>): Boolean {
+        // En üstteki noktanın x eksenindeki konumu ile alt tabanın orta noktası kıyaslanabilir
+        val minY = points.minOf { it.y }
+        val topPoints = points.filter { it.y < minY + (points.maxOf { it.y } - minY) * 0.25f }
+        // Eğer en üst kısım dar bir bölgede yoğunlaşıyorsa üçgendir
+        return topPoints.size < points.size * 0.4f
     }
 
     private fun distance(p1: PointF, p2: PointF): Float {
