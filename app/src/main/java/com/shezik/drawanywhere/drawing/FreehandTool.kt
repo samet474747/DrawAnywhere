@@ -33,7 +33,7 @@ class FreehandTool(private val ctx: ToolContext) : StrokeTool {
     override fun onFinish() {
         val stroke = ctx.strokes.lastOrNull() ?: return
         if (rawPoints.size > 5) {
-            val recognized = ShapeRecognizer().recognize(rawPoints)
+            val recognized = ShapeRecognizer.recognize(rawPoints)
             if (recognized != null) {
                 stroke._points.clear()
                 stroke._points.addAll(recognized.map { Offset(it.x, it.y) })
