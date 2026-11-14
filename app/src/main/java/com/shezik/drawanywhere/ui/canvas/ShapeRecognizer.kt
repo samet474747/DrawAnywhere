@@ -37,7 +37,6 @@ object ShapeRecognizer {
 
         // 3. KAPALI ŞEKİLLER (Üçgenler ve Dikdörtgenler)
         if (totalDistance < 70f) {
-            // Şeklin üçgen mi yoksa dörtgen mi olduğunu anlamak için ana köşeleri bulalım
             val trianglePoints = detectTriangle(points, minX, maxX, minY, maxY)
             if (trianglePoints != null) {
                 return trianglePoints
@@ -57,17 +56,13 @@ object ShapeRecognizer {
     }
 
     private fun detectTriangle(points: List<PointF>, minX: Float, maxX: Float, minY: Float, maxY: Float): List<PointF>? {
-        // En sivri tepe noktasını bul (y koordinatı en küçük olan veya çizim yönüne göre en uç nokta)
         val topPoint = points.minByOrNull { it.y } ?: return null
-        
-        // Tabandaki sol ve sağ köşe adayları (yüksekliğin alt kısmına yakın noktalar)
         val bottomPoints = points.filter { it.y > maxY - (maxY - minY) * 0.3f }
         if (bottomPoints.size < 2) return null
 
         val bottomLeft = bottomPoints.minByOrNull { it.x } ?: PointF(minX, maxY)
         val bottomRight = bottomPoints.maxByOrNull { it.x } ?: PointF(maxX, maxY)
 
-        // Eğer tepe noktası tabandaki iki noktaya göre makul bir üçgen formu oluşturuyorsa üçgen kabul et
         val baseWidth = distance(bottomLeft, bottomRight)
         if (baseWidth < 20f) return null
 
@@ -94,7 +89,7 @@ object ShapeRecognizer {
         val segments = 36
         for (i in 0..segments) {
             val angle = (i * 2 * Math.PI / segments).toFloat()
-            circlePoints.append(PointF(cx + r * kotlin.math.cos(angle), cy + r * kotlin.math.sin(angle)))
+            circlePoints.add(PointF(cx + r * kotlin.math.cos(angle), cy + r * kotlin.math.sin(angle)))
         }
         return circlePoints
     }
