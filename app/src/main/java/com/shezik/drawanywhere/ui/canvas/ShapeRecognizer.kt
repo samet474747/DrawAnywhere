@@ -8,7 +8,7 @@ import kotlin.math.sqrt
 object ShapeRecognizer {
 
     fun recognize(points: List<PointF>): List<PointF>? {
-        if (points.size < 12) return null
+        if (points.size < 10) return null
 
         val start = points.first()
         val end = points.last()
@@ -20,7 +20,6 @@ object ShapeRecognizer {
             return listOf(start, end)
         }
 
-        // Sınır kutusu (Bounding Box) hesaplamaları
         val minX = points.minOf { it.x }
         val maxX = points.maxOf { it.x }
         val minY = points.minOf { it.y }
@@ -29,7 +28,6 @@ object ShapeRecognizer {
         val height = maxY - minY
 
         // 2. ÇEMBER / DAİRE KONTROLÜ
-        // Başlangıç ve bitiş yakınsa, çevre ile alan oranı dairesel form veriyorsa çemberdir
         if (totalDistance < 50f && isCircleShape(points, minX, maxX, minY, maxY)) {
             val centerX = (minX + maxX) / 2f
             val centerY = (minY + maxY) / 2f
@@ -38,29 +36,42 @@ object ShapeRecognizer {
         }
 
         // 3. KAPALI ŞEKİLLER (Üçgenler ve Dikdörtgenler)
-        if (totalDistance < 60f) {
-            // Köşe tespiti yapalım
-            val corners = findCorners(points)
-
-            when (corners.size) {
-                3 -> {
-                    // Üçgen (Dar açılı, geniş açılı veya dik üçgen - orijinal köşe noktalarını koruyarak düzeltir)
-                    return listOf(corners[0], corners[1], corners[2], corners[0])
-                }
-                4, 5 -> {
-                    // Kare veya Dikdörtgen
-                    return listOf(
-                        PointF(minX, minY),
-                        PointF(maxX, minY),
-                        PointF(maxX, maxY),
-                        PointF(minX, maxY),
-                        PointF(minX, minY)
-                    )
-                }
+        if (totalDistance < 70f) {
+            // Şeklin üçgen mi yoksa dörtgen mi olduğunu anlamak için ana köşeleri bulalım
+            val trianglePoints = detectTriangle(points, minX, maxX, minY, maxY)
+            if (trianglePoints != null) {
+                return trianglePoints
             }
+
+            // Dörtgen / Kare
+            return listOf(
+                PointF(minX, minY),
+                PointF(maxX, minY),
+                PointF(maxX, maxY),
+                PointF(minX, maxY),
+                PointF(minX, minY)
+            )
         }
 
         return null
+    }
+
+    private fun detectTriangle(points: List<PointF>, minX: Float, maxX: Float, minY: Float, maxY: Float): List<PointF>? {
+        // En sivri tepe noktasını bul (y koordinatı en küçük olan veya çizim yönüne göre en uç nokta)
+        val topPoint = points.minByOrNull { it.y } ?: return null
+        
+        // Tabandaki sol ve sağ köşe adayları (yüksekliğin alt kısmına yakın noktalar)
+        val bottomPoints = points.filter { it.y > maxY - (maxY - minY) * 0.3f }
+        if (bottomPoints.size < 2) return null
+
+        val bottomLeft = bottomPoints.minByOrNull { it.x } ?: PointF(minX, maxY)
+        val bottomRight = bottomPoints.maxByOrNull { it.x } ?: PointF(maxX, maxY)
+
+        // Eğer tepe noktası tabandaki iki noktaya göre makul bir üçgen formu oluşturuyorsa üçgen kabul et
+        val baseWidth = distance(bottomLeft, bottomRight)
+        if (baseWidth < 20f) return null
+
+        return listOf(topPoint, bottomRight, bottomLeft, topPoint)
     }
 
     private fun isCircleShape(points: List<PointF>, minX: Float, maxX: Float, minY: Float, maxY: Float): Boolean {
@@ -75,7 +86,7 @@ object ShapeRecognizer {
             deviationSum += abs(dist - radius)
         }
         val avgDeviation = deviationSum / points.size
-        return avgDeviation < (radius * 0.25f) // Çember sapma toleransı
+        return avgDeviation < (radius * 0.3f)
     }
 
     private fun generateCirclePoints(cx: Float, cy: Float, r: Float): List<PointF> {
@@ -83,41 +94,9 @@ object ShapeRecognizer {
         val segments = 36
         for (i in 0..segments) {
             val angle = (i * 2 * Math.PI / segments).toFloat()
-            circlePoints.add(PointF(cx + r * kotlin.math.cos(angle), cy + r * kotlin.math.sin(angle)))
+            circlePoints.append(PointF(cx + r * kotlin.math.cos(angle), cy + r * kotlin.math.sin(angle)))
         }
         return circlePoints
-    }
-
-    private fun findCorners(points: List<PointF>): List<PointF> {
-        // Basitleştirilmiş köşe bulma (Douglas-Peucker türevi köşe elemesi)
-        val corners = mutableListOf<PointF>()
-        if (points.isEmpty()) return corners
-
-        corners.add(points.first())
-        var farthestPoint: PointF? = null
-        var maxDist = 0f
-
-        val start = points.first()
-        val end = points.last()
-
-        for (p in points) {
-            val d = distanceToSegment(p, start, end)
-            if (d > maxDist) {
-                maxDist = d
-                farthestPoint = p
-            }
-        }
-
-        farthestPoint?.let { corners.add(it) }
-        
-        // Eğer karmaşık bir formse ek köşe noktaları ekle
-        if (points.size > 30) {
-            val midIndex = points.size / 2
-            corners.add(points[midIndex])
-        }
-
-        corners.add(points.last())
-        return corners.distinctBy { "${it.x.toInt() / 15},${it.y.toInt() / 15}" }
     }
 
     private fun distance(p1: PointF, p2: PointF): Float {
